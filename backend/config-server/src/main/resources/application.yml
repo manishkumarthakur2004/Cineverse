@@ -1,0 +1,22 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: git
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI:file://${user.dir}/../config-repo}
+          search-paths: /
+          clone-on-start: false
+          default-label: master
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

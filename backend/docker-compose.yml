@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cineverse-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cineverse
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  config-server:
+    build:
+      context: .
+      args:
+        MODULE: config-server
+    container_name: cineverse-config-server
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./config-repo:/config-repo
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCHLOCATIONS=file:///config-repo
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      args:
+        MODULE: api-gateway
+    container_name: cineverse-api-gateway
+    ports:
+      - "9080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - AUTH_SERVICE_URI=http://auth-service:8081
+      - MOVIE_SERVICE_URI=http://movie-service:8082
+      - USER_SERVICE_URI=http://user-service:8083
+    depends_on:
+      config-server:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      args:
+        MODULE: auth-service
+    container_name: cineverse-auth-service
+    ports:
+      - "9081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - CONFIG_SERVER_URL=http://config-server:8888
+    depends_on:
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  movie-service:
+    build:
+      context: .
+      args:
+        MODULE: movie-service
+    container_name: cineverse-movie-service
+    ports:
+      - "9082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - CONFIG_SERVER_URL=http://config-server:8888
+    depends_on:
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      args:
+        MODULE: user-service
+    container_name: cineverse-user-service
+    ports:
+      - "9083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - CONFIG_SERVER_URL=http://config-server:8888
+    depends_on:
+      mysql:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
